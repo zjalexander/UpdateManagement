@@ -21,8 +21,8 @@
 
 param(
     [string]$SoftwareUpdateConfigurationRunContext,
-    [string]$ResourceGroup,
-    [string]$AutomationAccount
+    [parameter(Mandatory=$true)] [string]$ResourceGroup,
+    [parameter(Mandatory=$true)] [string]$AutomationAccount
 )
 #If you wish to use the run context, it must be converted from JSON
 $context = ConvertFrom-Json  $SoftwareUpdateConfigurationRunContext

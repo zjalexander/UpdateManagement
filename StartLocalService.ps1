@@ -23,8 +23,8 @@
 param(
     [parameter(Mandatory=$true)] [string[]]$HybridWorkerGroups,
     [string]$SoftwareUpdateConfigurationRunContext,
-    [string]$ResourceGroup,
-    [string]$AutomationAccount 
+    [parameter(Mandatory=$true)] [string]$ResourceGroup,
+    [parameter(Mandatory=$true)] [string]$AutomationAccount 
 )
 #region BoilerplateAuthentication
 #This requires a RunAs account

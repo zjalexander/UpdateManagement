@@ -20,8 +20,8 @@
 
 param(
     [string]$SoftwareUpdateConfigurationRunContext,
-    [string]$ResourceGroup,
-    [string]$AutomationAccount
+    [parameter(Mandatory=$true)] [string]$ResourceGroup,
+    [parameter(Mandatory=$true)] [string]$AutomationAccount
 )
 
 #region BoilerplateAuthentication
