@@ -24,10 +24,11 @@ param(
     [parameter(Mandatory=$true)] [string]$ResourceGroup,
     [parameter(Mandatory=$true)] [string]$AutomationAccount
 )
+
 #If you wish to use the run context, it must be converted from JSON
 $context = ConvertFrom-Json  $SoftwareUpdateConfigurationRunContext
 $vmIds = $context.SoftwareUpdateConfigurationSettings.AzureVirtualMachines
-$runId = $context.SoftwareUpdateConfigurationRunId
+$runId = "PrescriptContext" + $context.SoftwareUpdateConfigurationRunId
 
 #region BoilerplateAuthentication
 #This requires a RunAs account
@@ -46,11 +47,12 @@ $AzureContext = Select-AzureRmSubscription -SubscriptionId $ServicePrincipalConn
 New-AzureRmAutomationVariable -ResourceGroupName $ResourceGroup –AutomationAccountName $AutomationAccount –Name $runId -Value "" –Encrypted $false
 
 $updatedMachines = @()
-$startableStates = "stopping", "stopped", "deallocated", "deallocating"
+$startableStates = "stopped" , "stopping", "deallocated", "deallocating"
 
+#TODO: Fire off all Start commands in parallel
 #Parse the list of VMs and start those which are stopped
 #Azure VMs are expressed by:
-# subscription/$subscriptionID/resourcegroups/$resourceGroup/proveders/microsoft.compute/virtualmachines/$name
+# subscription/$subscriptionID/resourcegroups/$resourceGroup/providers/microsoft.compute/virtualmachines/$name
 $vmIds | ForEach-Object {
     $vmId =  $_
     
@@ -69,14 +71,16 @@ $vmIds | ForEach-Object {
         Write-Output "Starting '$($name)' ..."
         #Store the VM we started so we remember to shut it down later
         $updatedMachines += $vmId
-        Start-AzureRmVM -ResourceGroupName $rg -Name $name;
+        Start-AzureRmVM -ResourceGroupName $rg -Name $name -AsJob
     }else {
-        Write-Output ($name + " already running State: " + $vm.PowerState) 
+        Write-Output ($name + ": no action taken. State: " + $state) 
     }
 }
 
 $updatedMachinesCommaSeperated = $updatedMachines -join ","
-
+#Wait until all machines have finished starting before proceeding to the Update Deployment
+Write-Output "Waiting for machines to finish starting..."
+Get-Job | Wait-Job
 Write-output $updatedMachinesCommaSeperated
 #Store output in the automation variable
 Set-AutomationVariable –Name $runId -Value $updatedMachinesCommaSeperated

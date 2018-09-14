@@ -39,7 +39,8 @@ $AzureContext = Select-AzureRmSubscription -SubscriptionId $ServicePrincipalConn
 
 #If you wish to use the run context, it must be converted from JSON
 $context = ConvertFrom-Json  $SoftwareUpdateConfigurationRunContext
-$runId = $context.SoftwareUpdateConfigurationRunId
+$runId = "PrescriptContext" + $context.SoftwareUpdateConfigurationRunId
+
 
 #Retrieve the automation variable, which we named using the runID from our run context. 
 #See: https://docs.microsoft.com/en-us/azure/automation/automation-variables#activities
@@ -49,7 +50,7 @@ $stoppableStates = "starting", "running"
 
 #This script can run across subscriptions, so we need unique identifiers for each VMs
 #Azure VMs are expressed by:
-# subscription/$subscriptionID/resourcegroups/$resourceGroup/proveders/microsoft.compute/virtualmachines/$name
+# subscription/$subscriptionID/resourcegroups/$resourceGroup/providers/microsoft.compute/virtualmachines/$name
 $vmIds | ForEach-Object {
     $vmId =  $_
     
@@ -65,11 +66,13 @@ $vmIds | ForEach-Object {
     $state = ($vm.Statuses[1].DisplayStatus -split " ")[1]
     if($state -in $stoppableStates) {
         Write-Output "Stopping '$($name)' ..."
-        Stop-AzureRmVM -ResourceGroupName $rg -Name $name -Force;
+        Stop-AzureRmVM -ResourceGroupName $rg -Name $name -Force -AsJob
     }else {
-        Write-Output ($name + " already in a stopping State: " + $state) 
+        Write-Output ($name + ": already stopped. State: " + $state) 
     }
 }
-
+#Wait for all machines to finish stopping so we can include the results as part of the Update Deployment
+Write-Output "Waiting for machines to finish stopping..."
+Get-Job | Wait-Job
 #Clean up our variables:
-Remove-AzureRmAutomationVariable -AutomationAccountName $aaname -ResourceGroupName $rg -name $runID
+Remove-AzureRmAutomationVariable -AutomationAccountName $AutomationAccount -ResourceGroupName $ResourceGroup -name $runID
