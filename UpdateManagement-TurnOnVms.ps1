@@ -7,7 +7,7 @@
   It requires a RunAs account.
   This script will ensure all Azure VMs in the Update Deployment are running so they recieve updates.
   This script will store the names of machines that were started in an Automation variable so only those machines
-  are turned back off when the deployment is finished (TurnOffVMs.ps1)
+  are turned back off when the deployment is finished (UpdateManagement-TurnOffVMs.ps1)
 
 .PARAMETER SoftwareUpdateConfigurationRunContext
   This is a system variable which is automatically passed in by Update Management during a deployment.
