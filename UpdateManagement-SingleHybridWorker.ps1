@@ -10,8 +10,9 @@
   The name of the Azure Automation runbook you wish to execute on the hybrid workers in a local context
   
 .PARAMETER HybridWorkerGroups
-  An array of hybrid worker groups which should run another runbook from a local context.
+  A single hybrid worker group which should run another runbook from a local context.
   To guarantee execution on the right machine, each hybrid worker group should contain only one machine.
+  KNOWN ISSUE: Pre/Post scripts will not accept arrays or objects as arguments. 
 
 .PARAMETER SoftwareUpdateConfigurationRunContext
   This is a system variable which is automatically passed in by Update Management during a deployment.
