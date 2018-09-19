@@ -1,3 +1,4 @@
+#requires -Modules ThreadJob
 <#
 .SYNOPSIS
  Start VMs as part of an Update Management deployment
@@ -48,6 +49,7 @@ New-AzureRmAutomationVariable -ResourceGroupName $ResourceGroup –AutomationAcc
 
 $updatedMachines = @()
 $startableStates = "stopped" , "stopping", "deallocated", "deallocating"
+$jobIDs= New-Object System.Collections.Generic.List[System.Object]
 
 #TODO: Fire off all Start commands in parallel
 #Parse the list of VMs and start those which are stopped
@@ -71,7 +73,8 @@ $vmIds | ForEach-Object {
         Write-Output "Starting '$($name)' ..."
         #Store the VM we started so we remember to shut it down later
         $updatedMachines += $vmId
-        Start-AzureRmVM -ResourceGroupName $rg -Name $name -AsJob
+        $newJob = Start-ThreadJob -ScriptBlock { param($resource, $vmname) Start-AzureRmVM -ResourceGroupName $resource -Name $vmname} -ArgumentList $rg,$name
+        $jobIDs.Add($newJob.Id)
     }else {
         Write-Output ($name + ": no action taken. State: " + $state) 
     }
@@ -79,8 +82,23 @@ $vmIds | ForEach-Object {
 
 $updatedMachinesCommaSeperated = $updatedMachines -join ","
 #Wait until all machines have finished starting before proceeding to the Update Deployment
-Write-Output "Waiting for machines to finish starting..."
-Get-Job | Wait-Job
+$jobsList = $jobIDs.ToArray()
+if ($jobsList)
+{
+    Write-Output "Waiting for machines to finish starting..."
+    Wait-Job -Id $jobsList
+}
+
+foreach($id in $jobsList)
+{
+    $job = Get-Job -Id $id
+    if ($job.Error)
+    {
+        Write-Output $job.Error
+    }
+
+}
+
 Write-output $updatedMachinesCommaSeperated
 #Store output in the automation variable
 Set-AutomationVariable –Name $runId -Value $updatedMachinesCommaSeperated

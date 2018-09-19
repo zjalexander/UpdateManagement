@@ -47,6 +47,7 @@ $runId = "PrescriptContext" + $context.SoftwareUpdateConfigurationRunId
 $variable = Get-AutomationVariable -Name $runId
 $vmIds = $variable -split ","
 $stoppableStates = "starting", "running"
+$jobIDs= New-Object System.Collections.Generic.List[System.Object]
 
 #This script can run across subscriptions, so we need unique identifiers for each VMs
 #Azure VMs are expressed by:
@@ -66,13 +67,27 @@ $vmIds | ForEach-Object {
     $state = ($vm.Statuses[1].DisplayStatus -split " ")[1]
     if($state -in $stoppableStates) {
         Write-Output "Stopping '$($name)' ..."
-        Stop-AzureRmVM -ResourceGroupName $rg -Name $name -Force -AsJob
+        $newJob = Start-ThreadJob -ScriptBlock { param($resource, $vmname) Stop-AzureRmVM -ResourceGroupName $resource -Name $vmname -Force} -ArgumentList $rg,$name 
+        $jobIDs.Add($newJob.Id)
     }else {
         Write-Output ($name + ": already stopped. State: " + $state) 
     }
 }
 #Wait for all machines to finish stopping so we can include the results as part of the Update Deployment
-Write-Output "Waiting for machines to finish stopping..."
-Get-Job | Wait-Job
+$jobsList = $jobIDs.ToArray()
+if ($jobsList)
+{
+    Write-Output "Waiting for machines to finish stopping..."
+    Wait-Job -Id $jobsList
+}
+
+foreach($id in $jobsList)
+{
+    $job = Get-Job -Id $id
+    if ($job.Error)
+    {
+        Write-Output $job.Error
+    }
+}
 #Clean up our variables:
 Remove-AzureRmAutomationVariable -AutomationAccountName $AutomationAccount -ResourceGroupName $ResourceGroup -name $runID
