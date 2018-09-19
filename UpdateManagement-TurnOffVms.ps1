@@ -1,3 +1,4 @@
+#requires -Modules ThreadJob
 <#
 .SYNOPSIS
  Stop VMs that were started as part of an Update Management deployment
