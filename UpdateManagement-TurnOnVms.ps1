@@ -31,6 +31,22 @@ $context = ConvertFrom-Json  $SoftwareUpdateConfigurationRunContext
 $vmIds = $context.SoftwareUpdateConfigurationSettings.AzureVirtualMachines
 $runId = "PrescriptContext" + $context.SoftwareUpdateConfigurationRunId
 
+
+if (!$vmIds) 
+{
+    #Workaround: Had to change JSON formatting
+    $Settings = ConvertFrom-Json $context.SoftwareUpdateConfigurationSettings
+    #Write-Output "List of settings: $Settings"
+    $VmIds = $Settings.AzureVirtualMachines
+    #Write-Output "Azure VMs: $VmIds"
+    if (!$vmIds) 
+    {
+        Write-Output "No Azure VMs found"
+        return
+    }
+}
+
+
 #region BoilerplateAuthentication
 #This requires a RunAs account
 $ServicePrincipalConnection = Get-AutomationConnection -Name 'AzureRunAsConnection'

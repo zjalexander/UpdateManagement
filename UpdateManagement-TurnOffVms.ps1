@@ -46,6 +46,12 @@ $runId = "PrescriptContext" + $context.SoftwareUpdateConfigurationRunId
 #Retrieve the automation variable, which we named using the runID from our run context. 
 #See: https://docs.microsoft.com/en-us/azure/automation/automation-variables#activities
 $variable = Get-AutomationVariable -Name $runId
+if (!$variable) 
+{
+    Write-Output "No machines to turn off"
+    return
+}
+
 $vmIds = $variable -split ","
 $stoppableStates = "starting", "running"
 $jobIDs= New-Object System.Collections.Generic.List[System.Object]

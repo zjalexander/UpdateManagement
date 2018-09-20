@@ -26,13 +26,18 @@ Add-AzureRmAccount `
 $AzureContext = Select-AzureRmSubscription -SubscriptionId $ServicePrincipalConnection.SubscriptionID
 #endregion BoilerplateAuthentication
 
+Write-Output "Input: $SoftwareUpdateConfigurationRunContext"
 #If you wish to use the run context, it must be converted from JSON
 $context = ConvertFrom-Json  $SoftwareUpdateConfigurationRunContext
-#Access the properties of the SoftwareUpdateConfigurationRunContext
-$vmIds = $context.SoftwareUpdateConfigurationSettings.AzureVirtualMachines
-$runId = $context.SoftwareUpdateConfigurationRunId
+Write-Output "Context: $context" 
+$RunId = $context.SoftwareUpdateConfigurationRunId
+Write-Output "Run ID: $RunID"
+#Configuration settings is another JSON and must be parsed again
+$Settings = ConvertFrom-Json $context.SoftwareUpdateConfigurationSettings
+Write-Output "List of settings: $Settings"
+$VmIds = $Settings.AzureVirtualMachines
+Write-Output "Azure VMs: $VmIds"
 
-Write-Output $context
 
 #Example: How to create and write to a variable using the pre-script:
 <#
