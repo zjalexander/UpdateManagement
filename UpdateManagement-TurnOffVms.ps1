@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.1
 
 .GUID 9606f2a1-49f8-4a67-91d6-23fc6ebf5b3b
 
@@ -26,7 +26,7 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-
+Removed parameters AutomationAccount, ResourceGroup
 
 .PRIVATEDATA 
 
@@ -57,17 +57,10 @@ This script works with the Turn Off VMs script. It will store the names of machi
 .PARAMETER SoftwareUpdateConfigurationRunContext
   This is a system variable which is automatically passed in by Update Management during a deployment.
 
-.PARAMETER ResourceGroup
-  The resource group of the Automation account. This is used to store progress. 
-
-.PARAMETER AutomationAccount
-  The name of the Automation account. This is used to store progress. 
 #>
 
 param(
-    [string]$SoftwareUpdateConfigurationRunContext,
-    [parameter(Mandatory=$true)] [string]$ResourceGroup,
-    [parameter(Mandatory=$true)] [string]$AutomationAccount
+    [string]$SoftwareUpdateConfigurationRunContext
 )
 
 #region BoilerplateAuthentication
@@ -95,6 +88,23 @@ if (!$variable)
 {
     Write-Output "No machines to turn off"
     return
+}
+
+#https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Find-WhoAmI
+# In order to prevent asking for an Automation Account name and the resource group of that AA,
+# search through all the automation accounts in the subscription 
+# to find the one with a job which matches our job ID
+$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+
+foreach ($Automation in $AutomationResource)
+{
+    $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+    if (!([string]::IsNullOrEmpty($Job)))
+    {
+        $ResourceGroup = $Job.ResourceGroupName
+        $AutomationAccount = $Job.AutomationAccountName
+        break;
+    }
 }
 
 $vmIds = $variable -split ","

@@ -1,10 +1,52 @@
+
+<#PSScriptInfo
+
+.VERSION 1.0
+
+.GUID 5494503d-d282-435f-99c4-575a66335141
+
+.AUTHOR zachal
+
+.COMPANYNAME Microsoft
+
+.COPYRIGHT 
+
+.TAGS UpdateManagement, Automation
+
+.LICENSEURI 
+
+.PROJECTURI 
+
+.ICONURI 
+
+.EXTERNALMODULEDEPENDENCIES ThreadJob
+
+.REQUIREDSCRIPTS 
+
+.EXTERNALSCRIPTDEPENDENCIES 
+
+.RELEASENOTES
+
+
+.PRIVATEDATA 
+
+#>
+
+<# 
+
+.DESCRIPTION 
+  This script is intended to be run as a part of Update Management Pre/Post scripts. 
+  It uses RunCommand to execute a PowerShell script to stop a service.
+
+#> 
+
 <#
 .SYNOPSIS
  Stop a service on an AzureRM using RunCommand
 
 .DESCRIPTION
   This script is intended to be run as a part of Update Management Pre/Post scripts. 
-  It uses RunCommand to execute a PowerShell script to stop a service
+  It uses RunCommand to execute a PowerShell script to stop a service.
 
 .PARAMETER SoftwareUpdateConfigurationRunContext
   This is a system variable which is automatically passed in by Update Management during a deployment.
