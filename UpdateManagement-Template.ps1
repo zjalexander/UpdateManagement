@@ -1,3 +1,45 @@
+
+<#PSScriptInfo
+
+.VERSION 1.1
+
+.GUID 5a1ed24c-9099-4921-a135-bfc13213619b
+
+.AUTHOR zachal
+
+.COMPANYNAME Microsoft
+
+.COPYRIGHT 
+
+.TAGS UpdateManagement, Automation
+
+.LICENSEURI 
+
+.PROJECTURI 
+
+.ICONURI 
+
+.EXTERNALMODULEDEPENDENCIES 
+
+.REQUIREDSCRIPTS 
+
+.EXTERNALSCRIPTDEPENDENCIES 
+
+.RELEASENOTES
+
+
+.PRIVATEDATA 
+
+#>
+
+<# 
+
+.DESCRIPTION 
+ This is a template script for Update Management pre/post actions.
+ It contains a basic list of common tasks and can be used to write your own scripts. 
+
+#> 
+
 <#
 .SYNOPSIS
  Barebones script for Update Management Pre/Post
@@ -26,13 +68,18 @@ Add-AzureRmAccount `
 $AzureContext = Select-AzureRmSubscription -SubscriptionId $ServicePrincipalConnection.SubscriptionID
 #endregion BoilerplateAuthentication
 
+Write-Output "Input: $SoftwareUpdateConfigurationRunContext"
 #If you wish to use the run context, it must be converted from JSON
 $context = ConvertFrom-Json  $SoftwareUpdateConfigurationRunContext
-#Access the properties of the SoftwareUpdateConfigurationRunContext
-$vmIds = $context.SoftwareUpdateConfigurationSettings.AzureVirtualMachines
-$runId = $context.SoftwareUpdateConfigurationRunId
+Write-Output "Context: $context" 
+$RunId = $context.SoftwareUpdateConfigurationRunId
+Write-Output "Run ID: $RunID"
+#Configuration settings is another JSON and must be parsed again
+$Settings = ConvertFrom-Json $context.SoftwareUpdateConfigurationSettings
+Write-Output "List of settings: $Settings"
+$VmIds = $Settings.AzureVirtualMachines
+Write-Output "Azure VMs: $VmIds"
 
-Write-Output $context
 
 #Example: How to create and write to a variable using the pre-script:
 <#

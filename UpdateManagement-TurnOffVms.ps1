@@ -1,3 +1,49 @@
+
+<#PSScriptInfo
+
+.VERSION 1.1
+
+.GUID 9606f2a1-49f8-4a67-91d6-23fc6ebf5b3b
+
+.AUTHOR zachal
+
+.COMPANYNAME Microsoft 
+
+.COPYRIGHT 
+
+.TAGS UpdateManagement, Automation
+
+.LICENSEURI 
+
+.PROJECTURI 
+
+.ICONURI 
+
+.EXTERNALMODULEDEPENDENCIES ThreadJob
+
+.REQUIREDSCRIPTS 
+
+.EXTERNALSCRIPTDEPENDENCIES 
+
+.RELEASENOTES
+Removed parameters AutomationAccount, ResourceGroup
+
+.PRIVATEDATA 
+
+#>
+
+<# 
+
+.DESCRIPTION 
+ This script is intended to be run as a part of Update Management Pre/Post scripts.
+It requires a RunAs account.
+This script will ensure all Azure VMs in the Update Deployment are running so they recieve updates.
+This script works with the Turn Off VMs script. It will store the names of machines that were started in an Automation variable so only those machines are turned back off when the deployment is finished.
+ 
+
+#> 
+
+#requires -Modules ThreadJob
 <#
 .SYNOPSIS
  Stop VMs that were started as part of an Update Management deployment
@@ -11,17 +57,10 @@
 .PARAMETER SoftwareUpdateConfigurationRunContext
   This is a system variable which is automatically passed in by Update Management during a deployment.
 
-.PARAMETER ResourceGroup
-  The resource group of the Automation account. This is used to store progress. 
-
-.PARAMETER AutomationAccount
-  The name of the Automation account. This is used to store progress. 
 #>
 
 param(
-    [string]$SoftwareUpdateConfigurationRunContext,
-    [parameter(Mandatory=$true)] [string]$ResourceGroup,
-    [parameter(Mandatory=$true)] [string]$AutomationAccount
+    [string]$SoftwareUpdateConfigurationRunContext
 )
 
 #region BoilerplateAuthentication
@@ -45,8 +84,32 @@ $runId = "PrescriptContext" + $context.SoftwareUpdateConfigurationRunId
 #Retrieve the automation variable, which we named using the runID from our run context. 
 #See: https://docs.microsoft.com/en-us/azure/automation/automation-variables#activities
 $variable = Get-AutomationVariable -Name $runId
+if (!$variable) 
+{
+    Write-Output "No machines to turn off"
+    return
+}
+
+#https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Find-WhoAmI
+# In order to prevent asking for an Automation Account name and the resource group of that AA,
+# search through all the automation accounts in the subscription 
+# to find the one with a job which matches our job ID
+$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+
+foreach ($Automation in $AutomationResource)
+{
+    $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+    if (!([string]::IsNullOrEmpty($Job)))
+    {
+        $ResourceGroup = $Job.ResourceGroupName
+        $AutomationAccount = $Job.AutomationAccountName
+        break;
+    }
+}
+
 $vmIds = $variable -split ","
 $stoppableStates = "starting", "running"
+$jobIDs= New-Object System.Collections.Generic.List[System.Object]
 
 #This script can run across subscriptions, so we need unique identifiers for each VMs
 #Azure VMs are expressed by:
@@ -66,13 +129,27 @@ $vmIds | ForEach-Object {
     $state = ($vm.Statuses[1].DisplayStatus -split " ")[1]
     if($state -in $stoppableStates) {
         Write-Output "Stopping '$($name)' ..."
-        Stop-AzureRmVM -ResourceGroupName $rg -Name $name -Force -AsJob
+        $newJob = Start-ThreadJob -ScriptBlock { param($resource, $vmname) Stop-AzureRmVM -ResourceGroupName $resource -Name $vmname -Force} -ArgumentList $rg,$name 
+        $jobIDs.Add($newJob.Id)
     }else {
         Write-Output ($name + ": already stopped. State: " + $state) 
     }
 }
 #Wait for all machines to finish stopping so we can include the results as part of the Update Deployment
-Write-Output "Waiting for machines to finish stopping..."
-Get-Job | Wait-Job
+$jobsList = $jobIDs.ToArray()
+if ($jobsList)
+{
+    Write-Output "Waiting for machines to finish stopping..."
+    Wait-Job -Id $jobsList
+}
+
+foreach($id in $jobsList)
+{
+    $job = Get-Job -Id $id
+    if ($job.Error)
+    {
+        Write-Output $job.Error
+    }
+}
 #Clean up our variables:
 Remove-AzureRmAutomationVariable -AutomationAccountName $AutomationAccount -ResourceGroupName $ResourceGroup -name $runID

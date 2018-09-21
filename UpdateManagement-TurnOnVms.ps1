@@ -1,3 +1,55 @@
+
+<#PSScriptInfo
+
+.VERSION 1.2
+
+.GUID 5fbe9d16-981d-4a88-874c-365d46c1fcc2
+
+.AUTHOR zachal
+
+.COMPANYNAME Microsoft
+
+.COPYRIGHT 
+
+.TAGS UpdateManagement, Automation
+
+.LICENSEURI 
+
+.PROJECTURI 
+
+.ICONURI 
+
+.EXTERNALMODULEDEPENDENCIES ThreadJob
+
+.REQUIREDSCRIPTS 
+
+.EXTERNALSCRIPTDEPENDENCIES 
+
+.RELEASENOTES
+Removed parameters AutomationAccount, ResourceGroup
+
+.PRIVATEDATA 
+
+#>
+
+<# 
+
+.DESCRIPTION 
+ This script is intended to be run as a part of Update Management Pre/Post scripts.
+ 
+
+It requires a RunAs account and the usage of the Turn On VMs script as a pre-deployment script.
+ 
+
+This script will ensure all Azure VMs in the Update Deployment are turned off after they recieve updates.
+ 
+
+This script reads the name of machines that were started by Update Management via the Turn On VMs script
+
+
+#> 
+
+#requires -Modules ThreadJob
 <#
 .SYNOPSIS
  Start VMs as part of an Update Management deployment
@@ -11,24 +63,13 @@
 
 .PARAMETER SoftwareUpdateConfigurationRunContext
   This is a system variable which is automatically passed in by Update Management during a deployment.
- 
- .PARAMETER ResourceGroup
-  The resource group of the Automation account. This is used to store progress. 
 
-.PARAMETER AutomationAccount
-  The name of the Automation account. This is used to store progress. 
 #>
 
 param(
-    [string]$SoftwareUpdateConfigurationRunContext,
-    [parameter(Mandatory=$true)] [string]$ResourceGroup,
-    [parameter(Mandatory=$true)] [string]$AutomationAccount
+    [string]$SoftwareUpdateConfigurationRunContext
 )
 
-#If you wish to use the run context, it must be converted from JSON
-$context = ConvertFrom-Json  $SoftwareUpdateConfigurationRunContext
-$vmIds = $context.SoftwareUpdateConfigurationSettings.AzureVirtualMachines
-$runId = "PrescriptContext" + $context.SoftwareUpdateConfigurationRunId
 
 #region BoilerplateAuthentication
 #This requires a RunAs account
@@ -43,13 +84,50 @@ Add-AzureRmAccount `
 $AzureContext = Select-AzureRmSubscription -SubscriptionId $ServicePrincipalConnection.SubscriptionID
 #endregion BoilerplateAuthentication
 
+
+#If you wish to use the run context, it must be converted from JSON
+$context = ConvertFrom-Json  $SoftwareUpdateConfigurationRunContext
+$vmIds = $context.SoftwareUpdateConfigurationSettings.AzureVirtualMachines
+$runId = "PrescriptContext" + $context.SoftwareUpdateConfigurationRunId
+
+if (!$vmIds) 
+{
+    #Workaround: Had to change JSON formatting
+    $Settings = ConvertFrom-Json $context.SoftwareUpdateConfigurationSettings
+    #Write-Output "List of settings: $Settings"
+    $VmIds = $Settings.AzureVirtualMachines
+    #Write-Output "Azure VMs: $VmIds"
+    if (!$vmIds) 
+    {
+        Write-Output "No Azure VMs found"
+        return
+    }
+}
+
+#https://github.com/azureautomation/runbooks/blob/master/Utility/ARM/Find-WhoAmI
+# In order to prevent asking for an Automation Account name and the resource group of that AA,
+# search through all the automation accounts in the subscription 
+# to find the one with a job which matches our job ID
+$AutomationResource = Get-AzureRmResource -ResourceType Microsoft.Automation/AutomationAccounts
+
+foreach ($Automation in $AutomationResource)
+{
+    $Job = Get-AzureRmAutomationJob -ResourceGroupName $Automation.ResourceGroupName -AutomationAccountName $Automation.Name -Id $PSPrivateMetadata.JobId.Guid -ErrorAction SilentlyContinue
+    if (!([string]::IsNullOrEmpty($Job)))
+    {
+        $ResourceGroup = $Job.ResourceGroupName
+        $AutomationAccount = $Job.AutomationAccountName
+        break;
+    }
+}
+
 #This is used to store the state of VMs
 New-AzureRmAutomationVariable -ResourceGroupName $ResourceGroup –AutomationAccountName $AutomationAccount –Name $runId -Value "" –Encrypted $false
 
 $updatedMachines = @()
 $startableStates = "stopped" , "stopping", "deallocated", "deallocating"
+$jobIDs= New-Object System.Collections.Generic.List[System.Object]
 
-#TODO: Fire off all Start commands in parallel
 #Parse the list of VMs and start those which are stopped
 #Azure VMs are expressed by:
 # subscription/$subscriptionID/resourcegroups/$resourceGroup/providers/microsoft.compute/virtualmachines/$name
@@ -71,7 +149,8 @@ $vmIds | ForEach-Object {
         Write-Output "Starting '$($name)' ..."
         #Store the VM we started so we remember to shut it down later
         $updatedMachines += $vmId
-        Start-AzureRmVM -ResourceGroupName $rg -Name $name -AsJob
+        $newJob = Start-ThreadJob -ScriptBlock { param($resource, $vmname) Start-AzureRmVM -ResourceGroupName $resource -Name $vmname} -ArgumentList $rg,$name
+        $jobIDs.Add($newJob.Id)
     }else {
         Write-Output ($name + ": no action taken. State: " + $state) 
     }
@@ -79,8 +158,23 @@ $vmIds | ForEach-Object {
 
 $updatedMachinesCommaSeperated = $updatedMachines -join ","
 #Wait until all machines have finished starting before proceeding to the Update Deployment
-Write-Output "Waiting for machines to finish starting..."
-Get-Job | Wait-Job
+$jobsList = $jobIDs.ToArray()
+if ($jobsList)
+{
+    Write-Output "Waiting for machines to finish starting..."
+    Wait-Job -Id $jobsList
+}
+
+foreach($id in $jobsList)
+{
+    $job = Get-Job -Id $id
+    if ($job.Error)
+    {
+        Write-Output $job.Error
+    }
+
+}
+
 Write-output $updatedMachinesCommaSeperated
 #Store output in the automation variable
 Set-AutomationVariable –Name $runId -Value $updatedMachinesCommaSeperated
