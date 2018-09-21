@@ -9,7 +9,7 @@
 .PARAMETER SoftwareUpdateConfigurationRunContext
   This is a system variable which is automatically passed in by Update Management during a deployment.
 #>
-
+#requires -Modules ThreadJob
 param(
     [string]$SoftwareUpdateConfigurationRunContext
 )
@@ -32,13 +32,31 @@ $context = ConvertFrom-Json  $SoftwareUpdateConfigurationRunContext
 $vmIds = $context.SoftwareUpdateConfigurationSettings.AzureVirtualMachines
 $runId = $context.SoftwareUpdateConfigurationRunId
 
+if (!$vmIds) 
+{
+    #Workaround: Had to change JSON formatting
+    $Settings = ConvertFrom-Json $context.SoftwareUpdateConfigurationSettings
+    #Write-Output "List of settings: $Settings"
+    $VmIds = $Settings.AzureVirtualMachines
+    #Write-Output "Azure VMs: $VmIds"
+    if (!$vmIds) 
+    {
+        Write-Output "No Azure VMs found"
+        return
+    }
+}
+
 #The script you wish to run on each VM
 $scriptBlock = @"
 Stop-Service -Name "AudioSvc"
 "@
-
+$scriptPath = "$runID.ps1"
 #The cmdlet only accepts a file, so temporarily write the script to disk using runID as a unique name
-Out-File -FilePath "$runID.ps1" -InputObject $scriptBlock
+Out-File -FilePath $scriptPath -InputObject $scriptBlock
+$scriptFile = get-item $scriptpath
+$fullPath = $scriptfile.fullname
+
+$jobIDs= New-Object System.Collections.Generic.List[System.Object]
 
 #Start script on each machine
 $vmIds | ForEach-Object {
@@ -51,10 +69,27 @@ $vmIds | ForEach-Object {
     Write-Output ("Subscription Id: " + $subscriptionId)
     $mute = Select-AzureRmSubscription -Subscription $subscriptionId
     Write-Output "Invoking command on '$($name)' ..."
-    Invoke-AzureRmVMRunCommand -ResourceGroupName $rg -Name $name -CommandId 'RunPowerShellScript' -ScriptPath "$runID.ps1" -AsJob
+    $newJob = Start-ThreadJob -ScriptBlock { param($resourceGroup, $vmName, $scriptPath) Invoke-AzureRmVMRunCommand -ResourceGroupName $resourceGroup -Name $VmName -CommandId 'RunPowerShellScript' -ScriptPath $scriptPath} -ArgumentList $rg, $name, $fullPath
+    $jobIDs.Add($newJob.Id)
+    
 }
 
-Write-Output "Waiting for machines to finish executing..."
-Get-Job | Wait-Job
+$jobsList = $jobIDs.ToArray()
+if ($jobsList)
+{
+    Write-Output "Waiting for machines to finish executing..."
+    Wait-Job -Id $jobsList
+}
+
+foreach($id in $jobsList)
+{
+    $job = Get-Job -Id $id
+    if ($job.Error)
+    {
+        Write-Output $job.Error
+    }
+
+}
+
 #Clean up our variables:
 Remove-Item -Path "$runID.ps1"

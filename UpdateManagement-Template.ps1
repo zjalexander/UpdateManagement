@@ -1,3 +1,45 @@
+
+<#PSScriptInfo
+
+.VERSION 1.1
+
+.GUID 5a1ed24c-9099-4921-a135-bfc13213619b
+
+.AUTHOR zachal
+
+.COMPANYNAME Microsoft
+
+.COPYRIGHT 
+
+.TAGS UpdateManagement, Automation
+
+.LICENSEURI 
+
+.PROJECTURI 
+
+.ICONURI 
+
+.EXTERNALMODULEDEPENDENCIES 
+
+.REQUIREDSCRIPTS 
+
+.EXTERNALSCRIPTDEPENDENCIES 
+
+.RELEASENOTES
+
+
+.PRIVATEDATA 
+
+#>
+
+<# 
+
+.DESCRIPTION 
+ This is a template script for Update Management pre/post actions.
+ It contains a basic list of common tasks and can be used to write your own scripts. 
+
+#> 
+
 <#
 .SYNOPSIS
  Barebones script for Update Management Pre/Post

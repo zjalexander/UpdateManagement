@@ -1,3 +1,54 @@
+
+<#PSScriptInfo
+
+.VERSION 1.1
+
+.GUID 5fbe9d16-981d-4a88-874c-365d46c1fcc2
+
+.AUTHOR zachal
+
+.COMPANYNAME Microsoft
+
+.COPYRIGHT 
+
+.TAGS UpdateManagement, Automation
+
+.LICENSEURI 
+
+.PROJECTURI 
+
+.ICONURI 
+
+.EXTERNALMODULEDEPENDENCIES ThreadJob
+
+.REQUIREDSCRIPTS 
+
+.EXTERNALSCRIPTDEPENDENCIES 
+
+.RELEASENOTES
+
+
+.PRIVATEDATA 
+
+#>
+
+<# 
+
+.DESCRIPTION 
+ This script is intended to be run as a part of Update Management Pre/Post scripts.
+ 
+
+It requires a RunAs account and the usage of the Turn On VMs script as a pre-deployment script.
+ 
+
+This script will ensure all Azure VMs in the Update Deployment are turned off after they recieve updates.
+ 
+
+This script reads the name of machines that were started by Update Management via the Turn On VMs script
+
+
+#> 
+
 #requires -Modules ThreadJob
 <#
 .SYNOPSIS
