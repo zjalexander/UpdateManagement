@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.2
+.VERSION 1.3
 
 .GUID 5fbe9d16-981d-4a88-874c-365d46c1fcc2
 
@@ -122,7 +122,7 @@ foreach ($Automation in $AutomationResource)
 }
 
 #This is used to store the state of VMs
-New-AzureRmAutomationVariable -ResourceGroupName $ResourceGroup –AutomationAccountName $AutomationAccount –Name $runId -Value "" –Encrypted $false
+New-AzureRmAutomationVariable -ResourceGroupName $ResourceGroup -AutomationAccountName $AutomationAccount -Name $runId -Value "" -Encrypted $false
 
 $updatedMachines = @()
 $startableStates = "stopped" , "stopping", "deallocated", "deallocating"
@@ -177,4 +177,4 @@ foreach($id in $jobsList)
 
 Write-output $updatedMachinesCommaSeperated
 #Store output in the automation variable
-Set-AutomationVariable –Name $runId -Value $updatedMachinesCommaSeperated
+Set-AutomationVariable -Name $runId -Value $updatedMachinesCommaSeperated
