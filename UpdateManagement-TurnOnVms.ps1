@@ -127,6 +127,7 @@ New-AzureRmAutomationVariable -ResourceGroupName $ResourceGroup -AutomationAccou
 $updatedMachines = @()
 $startableStates = "stopped" , "stopping", "deallocated", "deallocating"
 $jobIDs= New-Object System.Collections.Generic.List[System.Object]
+$subscriptionPrevious="" 
 
 #Parse the list of VMs and start those which are stopped
 #Azure VMs are expressed by:
@@ -139,10 +140,14 @@ $vmIds | ForEach-Object {
     $rg = $split[4];
     $name = $split[8];
     Write-Output ("Subscription Id: " + $subscriptionId)
-    $mute = Select-AzureRmSubscription -Subscription $subscriptionId
+    If ( $subscriptionId -ne $subscriptionPrevious) {
+        if ($subscriptionPrevious -ne "") { sleep 10}
+        $mute = Select-AzureRmSubscription -Subscription $subscriptionId
+    }
+    
 
     $vm = Get-AzureRmVM -ResourceGroupName $rg -Name $name -Status 
-
+    $subscriptionPrevious=$subscriptionID
     #Query the state of the VM to see if it's already running or if it's already started
     $state = ($vm.Statuses[1].DisplayStatus -split " ")[1]
     if($state -in $startableStates) {
@@ -151,9 +156,11 @@ $vmIds | ForEach-Object {
         $updatedMachines += $vmId
         $newJob = Start-ThreadJob -ScriptBlock { param($resource, $vmname) Start-AzureRmVM -ResourceGroupName $resource -Name $vmname} -ArgumentList $rg,$name
         $jobIDs.Add($newJob.Id)
+        
     }else {
         Write-Output ($name + ": no action taken. State: " + $state) 
     }
+    
 }
 
 $updatedMachinesCommaSeperated = $updatedMachines -join ","
@@ -177,4 +184,5 @@ foreach($id in $jobsList)
 
 Write-output $updatedMachinesCommaSeperated
 #Store output in the automation variable
+$mute = Select-AzureRmSubscription -Subscription $AzureContext.Subscription.Id
 Set-AutomationVariable -Name $runId -Value $updatedMachinesCommaSeperated

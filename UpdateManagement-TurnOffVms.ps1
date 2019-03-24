@@ -110,6 +110,7 @@ foreach ($Automation in $AutomationResource)
 $vmIds = $variable -split ","
 $stoppableStates = "starting", "running"
 $jobIDs= New-Object System.Collections.Generic.List[System.Object]
+$subscriptionPrevious="" 
 
 #This script can run across subscriptions, so we need unique identifiers for each VMs
 #Azure VMs are expressed by:
@@ -122,15 +123,19 @@ $vmIds | ForEach-Object {
     $rg = $split[4];
     $name = $split[8];
     Write-Output ("Subscription Id: " + $subscriptionId)
-    $mute = Select-AzureRmSubscription -Subscription $subscriptionId
-
+    If ( $subscriptionId -ne $subscriptionPrevious) {
+        if ($subscriptionPrevious -ne "") { sleep 10}
+        $mute = Select-AzureRmSubscription -Subscription $subscriptionId
+    }
+   
     $vm = Get-AzureRmVM -ResourceGroupName $rg -Name $name -Status 
-
+    $subscriptionPrevious=$subscriptionID
     $state = ($vm.Statuses[1].DisplayStatus -split " ")[1]
     if($state -in $stoppableStates) {
         Write-Output "Stopping '$($name)' ..."
         $newJob = Start-ThreadJob -ScriptBlock { param($resource, $vmname) Stop-AzureRmVM -ResourceGroupName $resource -Name $vmname -Force} -ArgumentList $rg,$name 
         $jobIDs.Add($newJob.Id)
+        
     }else {
         Write-Output ($name + ": already stopped. State: " + $state) 
     }
@@ -152,4 +157,5 @@ foreach($id in $jobsList)
     }
 }
 #Clean up our variables:
+$mute = Select-AzureRmSubscription -Subscription $AzureContext.Subscription.Id
 Remove-AzureRmAutomationVariable -AutomationAccountName $AutomationAccount -ResourceGroupName $ResourceGroup -name $runID
